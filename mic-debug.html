@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mic debug — M3</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <h1>Mic pipeline diagnostics (M3)</h1>
+      <p>Not part of the game. Verifies mic → AudioContext → AudioWorklet → raw frames.</p>
+      <button id="start">Start mic capture</button>
+      <button id="stop" disabled>Stop</button>
+      <pre id="log" style="white-space: pre-wrap; background: #1f232a; padding: 1rem; border-radius: 8px;"></pre>
+    </div>
+    <script type="module" src="/mic-debug.ts"></script>
+  </body>
+</html>

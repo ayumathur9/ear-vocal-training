@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pitch debug — M4</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <h1>YIN pitch pipeline diagnostics (M4)</h1>
+      <p>Not part of the game. Verifies mic → AudioWorklet → YIN → Hz/confidence end to end.</p>
+      <button id="start">Start pitch capture</button>
+      <button id="stop" disabled>Stop</button>
+      <pre id="log" style="white-space: pre-wrap; background: #1f232a; padding: 1rem; border-radius: 8px;"></pre>
+    </div>
+    <script type="module" src="/pitch-debug.ts"></script>
+  </body>
+</html>
