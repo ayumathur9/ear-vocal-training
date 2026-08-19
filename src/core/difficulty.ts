@@ -1,3 +1,5 @@
+import type { IntervalDirection } from "./intervals.ts";
+
 export interface HigherLowerLevelConfig {
   level: number;
   gapSemitones: number;
@@ -76,6 +78,80 @@ export const HOLD_PITCH_MAX_LEVEL = HOLD_PITCH_LEVELS.length;
 export function holdPitchLevelConfig(level: number): HoldPitchLevelConfig {
   const clamped = Math.min(Math.max(1, level), HOLD_PITCH_MAX_LEVEL);
   return HOLD_PITCH_LEVELS[clamped - 1];
+}
+
+export interface IntervalDetectiveLevelConfig {
+  level: number;
+  semitoneChoices: number[];
+  directions: IntervalDirection[];
+  lowMidi: number;
+  highMidi: number;
+}
+
+/**
+ * Interval Detective difficulty ladder. Early levels use widely-spaced,
+ * easily-contrasted intervals in one direction; later levels add descending
+ * and harmonic (played-together) modes and close intervals (m2 vs M2) that
+ * are hard to tell apart even for trained ears.
+ */
+export const INTERVAL_DETECTIVE_LEVELS: IntervalDetectiveLevelConfig[] = [
+  { level: 1, semitoneChoices: [0, 7, 12], directions: ["ascending"], lowMidi: 60, highMidi: 77 },
+  { level: 2, semitoneChoices: [0, 5, 7, 12], directions: ["ascending", "descending"], lowMidi: 60, highMidi: 77 },
+  { level: 3, semitoneChoices: [0, 4, 5, 7, 9, 12], directions: ["ascending", "descending", "harmonic"], lowMidi: 55, highMidi: 79 },
+  { level: 4, semitoneChoices: [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12], directions: ["ascending", "descending", "harmonic"], lowMidi: 48, highMidi: 84 },
+  { level: 5, semitoneChoices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], directions: ["ascending", "descending", "harmonic"], lowMidi: 48, highMidi: 84 },
+];
+
+export const INTERVAL_DETECTIVE_MAX_LEVEL = INTERVAL_DETECTIVE_LEVELS.length;
+
+export function intervalDetectiveLevelConfig(level: number): IntervalDetectiveLevelConfig {
+  const clamped = Math.min(Math.max(1, level), INTERVAL_DETECTIVE_MAX_LEVEL);
+  return INTERVAL_DETECTIVE_LEVELS[clamped - 1];
+}
+
+export interface NoteMemoryLevelConfig {
+  level: number;
+  sequenceLength: number;
+  lowMidi: number;
+  highMidi: number;
+}
+
+/** Note Memory difficulty ladder. Sequence length and the note pool both grow with level. */
+export const NOTE_MEMORY_LEVELS: NoteMemoryLevelConfig[] = [
+  { level: 1, sequenceLength: 3, lowMidi: 60, highMidi: 67 },
+  { level: 2, sequenceLength: 4, lowMidi: 60, highMidi: 69 },
+  { level: 3, sequenceLength: 5, lowMidi: 57, highMidi: 72 },
+  { level: 4, sequenceLength: 6, lowMidi: 55, highMidi: 74 },
+  { level: 5, sequenceLength: 7, lowMidi: 53, highMidi: 76 },
+];
+
+export const NOTE_MEMORY_MAX_LEVEL = NOTE_MEMORY_LEVELS.length;
+
+export function noteMemoryLevelConfig(level: number): NoteMemoryLevelConfig {
+  const clamped = Math.min(Math.max(1, level), NOTE_MEMORY_MAX_LEVEL);
+  return NOTE_MEMORY_LEVELS[clamped - 1];
+}
+
+export interface SingScaleLevelConfig {
+  level: number;
+  toleranceCents: number;
+  includeDescending: boolean;
+}
+
+/** Sing the Scale difficulty ladder. Tolerance narrows and higher levels add the descending pass back down. */
+export const SING_SCALE_LEVELS: SingScaleLevelConfig[] = [
+  { level: 1, toleranceCents: 50, includeDescending: false },
+  { level: 2, toleranceCents: 40, includeDescending: false },
+  { level: 3, toleranceCents: 30, includeDescending: true },
+  { level: 4, toleranceCents: 20, includeDescending: true },
+  { level: 5, toleranceCents: 15, includeDescending: true },
+];
+
+export const SING_SCALE_MAX_LEVEL = SING_SCALE_LEVELS.length;
+
+export function singScaleLevelConfig(level: number): SingScaleLevelConfig {
+  const clamped = Math.min(Math.max(1, level), SING_SCALE_MAX_LEVEL);
+  return SING_SCALE_LEVELS[clamped - 1];
 }
 
 // Exported for display only ("2/3 correct to level up") — not a behavior change.

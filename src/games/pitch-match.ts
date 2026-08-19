@@ -9,6 +9,7 @@ import {
 } from "../core/difficulty.ts";
 import { initialSessionState, applyRoundResult, pitchAccuracy, isWithinTolerance, type SessionState } from "../core/scoring.ts";
 import { loadProfile, saveProfile, type VocalRange } from "../core/storage.ts";
+import { recordAttempt } from "../core/skill-profile.ts";
 import { playNote } from "../audio/engine.ts";
 import { startPitchCapture, MicError, type MicSession } from "../audio/mic.ts";
 import { PitchStabilizer } from "../audio/smoothing.ts";
@@ -132,13 +133,14 @@ export function mountPitchMatch(root: HTMLElement, range: VocalRange, onExit: ()
   let streakJustIncreased = false;
   let leveledUpTo: number | null = null;
 
-  function persist(correct: boolean): void {
+  function persist(evaluation: AttemptEvaluation): void {
     const p = loadProfile();
     p.pitchMatch.level = game.difficulty.level;
     p.pitchMatch.played += 1;
-    if (correct) p.pitchMatch.correct += 1;
+    if (evaluation.correct) p.pitchMatch.correct += 1;
     p.pitchMatch.bestScore = Math.max(p.pitchMatch.bestScore, game.session.score);
     p.pitchMatch.bestStreak = Math.max(p.pitchMatch.bestStreak, game.session.bestStreak);
+    p.skillProfile = recordAttempt(p.skillProfile, "voice:pitch-match", evaluation.accuracy, Date.now());
     saveProfile(p);
   }
 
@@ -430,7 +432,7 @@ export function mountPitchMatch(root: HTMLElement, range: VocalRange, onExit: ()
     const levelBefore = game.difficulty.level;
     const evaluation = evaluateAttempt(game.round!, detectedHz);
     game = submitAttempt(game, evaluation);
-    persist(evaluation.correct);
+    persist(evaluation);
     streakJustIncreased = evaluation.correct;
     leveledUpTo = game.difficulty.level > levelBefore ? game.difficulty.level : null;
     setUi({ kind: "result", evaluation, detectedHz });

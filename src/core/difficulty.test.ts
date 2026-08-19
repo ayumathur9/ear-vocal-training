@@ -8,6 +8,12 @@ import {
   PITCH_MATCH_MAX_LEVEL,
   holdPitchLevelConfig,
   HOLD_PITCH_MAX_LEVEL,
+  intervalDetectiveLevelConfig,
+  INTERVAL_DETECTIVE_MAX_LEVEL,
+  noteMemoryLevelConfig,
+  NOTE_MEMORY_MAX_LEVEL,
+  singScaleLevelConfig,
+  SING_SCALE_MAX_LEVEL,
 } from "./difficulty.ts";
 
 describe("nextDifficultyState", () => {
@@ -108,5 +114,55 @@ describe("holdPitchLevelConfig", () => {
       expect(configs[i].toleranceCents).toBeLessThan(configs[i - 1].toleranceCents);
       expect(configs[i].durationMs).toBeGreaterThan(configs[i - 1].durationMs);
     }
+  });
+});
+
+describe("intervalDetectiveLevelConfig", () => {
+  it("clamps below level 1 up to level 1 and above the max down to it", () => {
+    expect(intervalDetectiveLevelConfig(0).level).toBe(1);
+    expect(intervalDetectiveLevelConfig(999).level).toBe(INTERVAL_DETECTIVE_MAX_LEVEL);
+  });
+
+  it("level 1 is ascending-only", () => {
+    expect(intervalDetectiveLevelConfig(1).directions).toEqual(["ascending"]);
+  });
+
+  it("later levels add descending and harmonic modes", () => {
+    const top = intervalDetectiveLevelConfig(INTERVAL_DETECTIVE_MAX_LEVEL);
+    expect(top.directions).toContain("descending");
+    expect(top.directions).toContain("harmonic");
+  });
+});
+
+describe("noteMemoryLevelConfig", () => {
+  it("clamps below level 1 up to level 1 and above the max down to it", () => {
+    expect(noteMemoryLevelConfig(0).level).toBe(1);
+    expect(noteMemoryLevelConfig(999).level).toBe(NOTE_MEMORY_MAX_LEVEL);
+  });
+
+  it("sequence length grows as level increases", () => {
+    const configs = Array.from({ length: NOTE_MEMORY_MAX_LEVEL }, (_, i) => noteMemoryLevelConfig(i + 1));
+    for (let i = 1; i < configs.length; i++) {
+      expect(configs[i].sequenceLength).toBeGreaterThan(configs[i - 1].sequenceLength);
+    }
+  });
+});
+
+describe("singScaleLevelConfig", () => {
+  it("clamps below level 1 up to level 1 and above the max down to it", () => {
+    expect(singScaleLevelConfig(0).level).toBe(1);
+    expect(singScaleLevelConfig(999).level).toBe(SING_SCALE_MAX_LEVEL);
+  });
+
+  it("tolerance narrows as level increases", () => {
+    const configs = Array.from({ length: SING_SCALE_MAX_LEVEL }, (_, i) => singScaleLevelConfig(i + 1));
+    for (let i = 1; i < configs.length; i++) {
+      expect(configs[i].toleranceCents).toBeLessThan(configs[i - 1].toleranceCents);
+    }
+  });
+
+  it("only later levels include the descending pass", () => {
+    expect(singScaleLevelConfig(1).includeDescending).toBe(false);
+    expect(singScaleLevelConfig(SING_SCALE_MAX_LEVEL).includeDescending).toBe(true);
   });
 });

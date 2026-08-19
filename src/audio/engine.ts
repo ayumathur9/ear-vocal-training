@@ -65,3 +65,39 @@ export async function playNotePair(hzA: number, hzB: number, gapMs = 200, noteMs
   await delay(gapMs);
   await playNote(hzB, { durationMs: noteMs });
 }
+
+/**
+ * Plays several tones together (a "harmonic" interval or chord), each with
+ * its own oscillator/gain sharing one ADSR envelope, resolving once they've
+ * all finished. Gain defaults lower than `playNote`'s since amplitudes sum.
+ */
+export function playChord(hzs: number[], options: PlayNoteOptions = {}): Promise<void> {
+  const { durationMs = 800, attackMs = 15, releaseMs = 60, gain = 0.18 } = options;
+  const ctx = getAudioContext();
+  const now = ctx.currentTime;
+  const attackEnd = now + attackMs / 1000;
+  const releaseStart = now + durationMs / 1000;
+  const releaseEnd = releaseStart + releaseMs / 1000;
+
+  const endings = hzs.map(
+    (hz) =>
+      new Promise<void>((resolve) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = hz;
+
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(gain, attackEnd);
+        gainNode.gain.setValueAtTime(gain, releaseStart);
+        gainNode.gain.linearRampToValueAtTime(0, releaseEnd);
+
+        osc.connect(gainNode).connect(ctx.destination);
+        osc.start(now);
+        osc.stop(releaseEnd);
+        osc.onended = () => resolve();
+      }),
+  );
+
+  return Promise.all(endings).then(() => undefined);
+}

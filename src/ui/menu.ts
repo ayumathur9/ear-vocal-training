@@ -1,7 +1,15 @@
 import { loadProfile, type GameProgress } from "../core/storage.ts";
-import { MAX_LEVEL, PITCH_MATCH_MAX_LEVEL, HOLD_PITCH_MAX_LEVEL } from "../core/difficulty.ts";
+import {
+  MAX_LEVEL,
+  PITCH_MATCH_MAX_LEVEL,
+  HOLD_PITCH_MAX_LEVEL,
+  INTERVAL_DETECTIVE_MAX_LEVEL,
+  NOTE_MEMORY_MAX_LEVEL,
+  SING_SCALE_MAX_LEVEL,
+} from "../core/difficulty.ts";
+import type { GameId } from "../core/skill-profile.ts";
 
-export type GameId = "higher-lower" | "pitch-match" | "hold-pitch";
+export type { GameId };
 
 export interface MenuEntry {
   id: GameId;
@@ -41,9 +49,36 @@ const ENTRIES: MenuEntry[] = [
     maxLevel: HOLD_PITCH_MAX_LEVEL,
     enabled: true,
   },
+  {
+    id: "interval-detective",
+    index: "04",
+    title: "Interval Detective",
+    description: "Name the interval between two notes.",
+    icon: "🔍",
+    maxLevel: INTERVAL_DETECTIVE_MAX_LEVEL,
+    enabled: true,
+  },
+  {
+    id: "note-memory",
+    index: "05",
+    title: "Note Memory",
+    description: "Hear a sequence of notes, then tap it back.",
+    icon: "🧠",
+    maxLevel: NOTE_MEMORY_MAX_LEVEL,
+    enabled: true,
+  },
+  {
+    id: "sing-scale",
+    index: "06",
+    title: "Sing the Scale",
+    description: "Sing a full scale, evaluated note by note.",
+    icon: "🎼",
+    maxLevel: SING_SCALE_MAX_LEVEL,
+    enabled: true,
+  },
 ];
 
-export function renderMenu(root: HTMLElement, onSelect: (id: GameId) => void): void {
+export function renderMenu(root: HTMLElement, onSelect: (id: GameId) => void, onShowProfile: () => void): void {
   root.innerHTML = "";
   const profile = loadProfile();
 
@@ -57,6 +92,12 @@ export function renderMenu(root: HTMLElement, onSelect: (id: GameId) => void): v
   header.append(h1, sub);
   root.appendChild(header);
 
+  const profileLink = document.createElement("button");
+  profileLink.className = "back-link";
+  profileLink.textContent = "📊 Your Skill Profile";
+  profileLink.addEventListener("click", onShowProfile);
+  root.appendChild(profileLink);
+
   const list = document.createElement("div");
   list.className = "menu-list";
 
@@ -64,6 +105,9 @@ export function renderMenu(root: HTMLElement, onSelect: (id: GameId) => void): v
     "higher-lower": profile.higherLower,
     "pitch-match": profile.pitchMatch,
     "hold-pitch": profile.holdPitch,
+    "interval-detective": profile.intervalDetective,
+    "note-memory": profile.noteMemory,
+    "sing-scale": profile.singScale,
   };
 
   ENTRIES.forEach((entry, i) => {

@@ -1,3 +1,5 @@
+import type { SkillProfile } from "./skill-profile.ts";
+
 const STORAGE_KEY = "evt.v1.profile";
 
 export interface GameProgress {
@@ -22,8 +24,12 @@ export interface Profile {
   higherLower: GameProgress;
   pitchMatch: GameProgress;
   holdPitch: GameProgress;
+  intervalDetective: GameProgress;
+  noteMemory: GameProgress;
+  singScale: GameProgress;
   range?: VocalRange;
   mic?: MicCalibration;
+  skillProfile: SkillProfile;
 }
 
 function defaultProgress(): GameProgress {
@@ -36,6 +42,10 @@ export function defaultProfile(): Profile {
     higherLower: defaultProgress(),
     pitchMatch: defaultProgress(),
     holdPitch: defaultProgress(),
+    intervalDetective: defaultProgress(),
+    noteMemory: defaultProgress(),
+    singScale: defaultProgress(),
+    skillProfile: {},
   };
 }
 

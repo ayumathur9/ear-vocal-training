@@ -9,6 +9,7 @@ import {
 } from "../core/difficulty.ts";
 import { initialSessionState, applyRoundResult, type SessionState } from "../core/scoring.ts";
 import { loadProfile, saveProfile, type VocalRange } from "../core/storage.ts";
+import { recordAttempt } from "../core/skill-profile.ts";
 import { playNote } from "../audio/engine.ts";
 import { startPitchCapture, MicError, type MicSession } from "../audio/mic.ts";
 import { PitchStabilizer } from "../audio/smoothing.ts";
@@ -110,13 +111,14 @@ export function mountHoldPitch(root: HTMLElement, range: VocalRange, onExit: () 
   let streakJustIncreased = false;
   let leveledUpTo: number | null = null;
 
-  function persist(correct: boolean): void {
+  function persist(result: HoldAttemptResult, correct: boolean): void {
     const p = loadProfile();
     p.holdPitch.level = game.difficulty.level;
     p.holdPitch.played += 1;
     if (correct) p.holdPitch.correct += 1;
     p.holdPitch.bestScore = Math.max(p.holdPitch.bestScore, game.session.score);
     p.holdPitch.bestStreak = Math.max(p.holdPitch.bestStreak, game.session.bestStreak);
+    p.skillProfile = recordAttempt(p.skillProfile, "voice:hold-stability", result.stabilityPercent, Date.now());
     saveProfile(p);
   }
 
@@ -370,7 +372,7 @@ export function mountHoldPitch(root: HTMLElement, range: VocalRange, onExit: () 
     const levelBefore = game.difficulty.level;
     const correct = result.stabilityPercent >= PASS_STABILITY_THRESHOLD;
     game = submitAttempt(game, result);
-    persist(correct);
+    persist(result, correct);
     streakJustIncreased = correct;
     leveledUpTo = game.difficulty.level > levelBefore ? game.difficulty.level : null;
     setUi({ kind: "result", result, correct });

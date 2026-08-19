@@ -1,36 +1,40 @@
-import { midiToHz, randomNotePair } from "../core/notes.ts";
+import { midiToHz } from "../core/notes.ts";
+import { randomIntervalQuestion, intervalName, type IntervalDirection } from "../core/intervals.ts";
 import {
-  levelConfig,
+  intervalDetectiveLevelConfig,
   initialDifficultyState,
   nextDifficultyState,
-  MAX_LEVEL,
+  INTERVAL_DETECTIVE_MAX_LEVEL,
   PROMOTE_AFTER_STREAK,
   type DifficultyState,
 } from "../core/difficulty.ts";
 import { initialSessionState, applyRoundResult, type SessionState } from "../core/scoring.ts";
 import { loadProfile, saveProfile } from "../core/storage.ts";
 import { recordAttempt } from "../core/skill-profile.ts";
-import { playNote } from "../audio/engine.ts";
+import { playNotePair, playChord } from "../audio/engine.ts";
 import { buildHud, buildLevelProgress } from "../ui/hud.ts";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export interface RoundState {
-  midiA: number;
-  midiB: number;
+export interface IntervalRoundState {
+  rootMidi: number;
+  targetMidi: number;
+  semitones: number;
+  direction: IntervalDirection;
+  choices: number[];
   awaitingAnswer: boolean;
 }
 
-export interface GameState {
+export interface IntervalGameState {
   session: SessionState;
   difficulty: DifficultyState;
-  round: RoundState | null;
+  round: IntervalRoundState | null;
 }
 
 /** Pure state machine, no DOM/audio side effects — kept testable in isolation. */
-export function createGame(startingLevel = 1): GameState {
+export function createGame(startingLevel = 1): IntervalGameState {
   return {
     session: initialSessionState(),
     difficulty: { ...initialDifficultyState(), level: startingLevel },
@@ -38,29 +42,28 @@ export function createGame(startingLevel = 1): GameState {
   };
 }
 
-export function startRound(state: GameState, rng: () => number = Math.random): GameState {
-  const cfg = levelConfig(state.difficulty.level);
-  const [midiA, midiB] = randomNotePair(cfg.lowMidi, cfg.highMidi, cfg.gapSemitones, rng);
-  return { ...state, round: { midiA, midiB, awaitingAnswer: true } };
+export function startRound(state: IntervalGameState, rng: () => number = Math.random): IntervalGameState {
+  const cfg = intervalDetectiveLevelConfig(state.difficulty.level);
+  const direction = cfg.directions[Math.floor(rng() * cfg.directions.length)];
+  const q = randomIntervalQuestion(cfg.lowMidi, cfg.highMidi, cfg.semitoneChoices, direction, rng);
+  return {
+    ...state,
+    round: { ...q, choices: cfg.semitoneChoices, awaitingAnswer: true },
+  };
 }
-
-export type Answer = "first" | "second";
 
 export interface AnswerResult {
   correct: boolean;
-  state: GameState;
+  state: IntervalGameState;
 }
 
-export function submitAnswer(state: GameState, answer: Answer): AnswerResult {
+export function submitAnswer(state: IntervalGameState, answerSemitones: number): AnswerResult {
   if (!state.round || !state.round.awaitingAnswer) {
     throw new Error("No round is currently awaiting an answer");
   }
-  const { midiA, midiB } = state.round;
-  const higherIsFirst = midiA > midiB;
-  const correct = (answer === "first" && higherIsFirst) || (answer === "second" && !higherIsFirst);
-
+  const correct = answerSemitones === state.round.semitones;
   const session = applyRoundResult(state.session, correct, state.difficulty.level);
-  const difficulty = nextDifficultyState(state.difficulty, correct);
+  const difficulty = nextDifficultyState(state.difficulty, correct, INTERVAL_DETECTIVE_MAX_LEVEL);
 
   return {
     correct,
@@ -69,24 +72,23 @@ export function submitAnswer(state: GameState, answer: Answer): AnswerResult {
 }
 
 /** Wires the pure state machine up to audio playback, storage, and the DOM. */
-export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
+export function mountIntervalDetective(root: HTMLElement, onExit: () => void): void {
   const profile = loadProfile();
-  let game = createGame(profile.higherLower.level);
+  let game = createGame(profile.intervalDetective.level);
   let busy = false;
-  let playingIndex: 0 | 1 | null = null;
-  let lastAnswer: AnswerResult | null = null;
+  let lastAnswer: (AnswerResult & { chosenSemitones: number }) | null = null;
   let lastGain = 0;
   let streakJustIncreased = false;
   let leveledUpTo: number | null = null;
 
-  function persist(correct: boolean): void {
+  function persist(correct: boolean, direction: IntervalDirection): void {
     const p = loadProfile();
-    p.higherLower.level = game.difficulty.level;
-    p.higherLower.played += 1;
-    if (correct) p.higherLower.correct += 1;
-    p.higherLower.bestScore = Math.max(p.higherLower.bestScore, game.session.score);
-    p.higherLower.bestStreak = Math.max(p.higherLower.bestStreak, game.session.bestStreak);
-    p.skillProfile = recordAttempt(p.skillProfile, "ear:relative-pitch", correct ? 100 : 0, Date.now());
+    p.intervalDetective.level = game.difficulty.level;
+    p.intervalDetective.played += 1;
+    if (correct) p.intervalDetective.correct += 1;
+    p.intervalDetective.bestScore = Math.max(p.intervalDetective.bestScore, game.session.score);
+    p.intervalDetective.bestStreak = Math.max(p.intervalDetective.bestStreak, game.session.bestStreak);
+    p.skillProfile = recordAttempt(p.skillProfile, `ear:intervals:${direction}`, correct ? 100 : 0, Date.now());
     saveProfile(p);
   }
 
@@ -101,7 +103,7 @@ export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
 
     root.appendChild(
       buildHud({
-        gameName: "Higher or Lower",
+        gameName: "Interval Detective",
         level: game.difficulty.level,
         round: game.session.round,
         score: game.session.score,
@@ -113,20 +115,22 @@ export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
     if (leveledUpTo !== null) {
       const banner = document.createElement("div");
       banner.className = "level-up-banner";
-      banner.textContent = `LEVEL UP! Now on Level ${leveledUpTo} — the gap between notes just got smaller.`;
+      banner.textContent = `LEVEL UP! Now on Level ${leveledUpTo} — new intervals unlocked.`;
       root.appendChild(banner);
     }
 
-    root.appendChild(buildLevelProgress(game.difficulty.level, MAX_LEVEL, game.difficulty.consecutiveCorrect, PROMOTE_AFTER_STREAK));
+    root.appendChild(
+      buildLevelProgress(game.difficulty.level, INTERVAL_DETECTIVE_MAX_LEVEL, game.difficulty.consecutiveCorrect, PROMOTE_AFTER_STREAK),
+    );
 
     const panel = document.createElement("div");
     panel.className = "panel";
 
     if (!game.round) {
-      panel.appendChild(makeMessage("Two notes will play, back to back. Which one was higher?"));
+      panel.appendChild(makeMessage("Two notes will play. What interval is between them?"));
       const btn = document.createElement("button");
       btn.className = "btn-primary btn-block";
-      btn.textContent = "PLAY NOTES";
+      btn.textContent = "PLAY INTERVAL";
       btn.disabled = busy;
       btn.addEventListener("click", () => void handlePlay());
       panel.appendChild(btn);
@@ -150,8 +154,7 @@ export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
         const explain = document.createElement("div");
         explain.className = "panel-message";
         explain.style.marginTop = "0.5rem";
-        const higherWasFirst = game.round.midiA > game.round.midiB;
-        explain.textContent = `The ${higherWasFirst ? "first" : "second"} note was higher.`;
+        explain.textContent = `It was a ${intervalName(game.round.semitones).name} (${intervalName(game.round.semitones).short}).`;
         flash.appendChild(explain);
       }
       panel.appendChild(flash);
@@ -165,31 +168,28 @@ export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
       return;
     }
 
-    const noteRow = document.createElement("div");
-    noteRow.className = "note-row";
-    noteRow.append(buildNoteCard("NOTE 1", playingIndex === 0), buildNoteCard("NOTE 2", playingIndex === 1));
-    panel.appendChild(noteRow);
+    const modeLabel = document.createElement("div");
+    modeLabel.className = "panel-message";
+    modeLabel.textContent =
+      game.round.direction === "harmonic" ? "Played together — what interval?" : `Played ${game.round.direction} — what interval?`;
+    panel.appendChild(modeLabel);
 
-    if (!game.round.awaitingAnswer) {
-      const replay = document.createElement("button");
-      replay.className = "btn-block";
-      replay.textContent = busy ? "Playing…" : "▸ Replay";
-      replay.disabled = busy;
-      replay.addEventListener("click", () => void handlePlay());
-      panel.appendChild(replay);
-    } else if (busy) {
+    if (busy) {
       panel.appendChild(makeMessage("Listening…"));
     } else {
-      const choiceRow = document.createElement("div");
-      choiceRow.className = "choice-row";
-      choiceRow.appendChild(buildChoiceButton("A", "HIGHER = FIRST", () => handleAnswer("first")));
-      choiceRow.appendChild(buildChoiceButton("B", "HIGHER = SECOND", () => handleAnswer("second")));
-      panel.appendChild(choiceRow);
+      const choiceGrid = document.createElement("div");
+      choiceGrid.className = "choice-row";
+      choiceGrid.style.flexWrap = "wrap";
+      for (const semitones of game.round.choices) {
+        const info = intervalName(semitones);
+        choiceGrid.appendChild(buildChoiceButton(info.short, info.name, () => handleAnswer(semitones)));
+      }
+      panel.appendChild(choiceGrid);
 
       const replay = document.createElement("button");
       replay.className = "btn-block";
       replay.style.marginTop = "0.75rem";
-      replay.textContent = "▸ Replay notes";
+      replay.textContent = "▸ Replay interval";
       replay.addEventListener("click", () => void handlePlay());
       panel.appendChild(replay);
     }
@@ -201,25 +201,6 @@ export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
     const p = document.createElement("p");
     p.textContent = text;
     return p;
-  }
-
-  function buildNoteCard(label: string, isPlaying: boolean): HTMLElement {
-    const card = document.createElement("div");
-    card.className = "note-card" + (isPlaying ? " is-playing" : "");
-    const cardLabel = document.createElement("div");
-    cardLabel.className = "note-card-label";
-    cardLabel.textContent = label;
-    const icon = document.createElement("div");
-    icon.className = "note-card-icon";
-    icon.textContent = "🎵";
-    card.append(cardLabel, icon);
-    if (isPlaying) {
-      const eq = document.createElement("div");
-      eq.className = "eq-bars";
-      eq.innerHTML = "<span></span><span></span><span></span><span></span>";
-      card.appendChild(eq);
-    }
-    return card;
   }
 
   function buildChoiceButton(letter: string, label: string, onClick: () => void): HTMLElement {
@@ -247,28 +228,32 @@ export function mountHigherLower(root: HTMLElement, onExit: () => void): void {
     }
     render();
 
-    const { midiA, midiB } = game.round!;
-    playingIndex = 0;
-    render();
-    await playNote(midiToHz(midiA));
-    await delay(200);
-    playingIndex = 1;
-    render();
-    await playNote(midiToHz(midiB));
+    const { rootMidi, targetMidi, direction } = game.round!;
+    const rootHz = midiToHz(rootMidi);
+    const targetHz = midiToHz(targetMidi);
 
-    playingIndex = null;
+    if (direction === "harmonic") {
+      await playChord([rootHz, targetHz], { durationMs: 1200 });
+    } else if (direction === "ascending") {
+      await playNotePair(rootHz, targetHz);
+    } else {
+      await playNotePair(rootHz, targetHz); // root always plays first; target's placement below it already encodes "descending"
+    }
+
+    await delay(50);
     busy = false;
     render();
   }
 
-  function handleAnswer(answer: Answer): void {
+  function handleAnswer(answerSemitones: number): void {
     if (busy || !game.round?.awaitingAnswer) return;
     const levelBefore = game.difficulty.level;
     const scoreBefore = game.session.score;
-    const result = submitAnswer(game, answer);
+    const direction = game.round.direction;
+    const result = submitAnswer(game, answerSemitones);
     game = result.state;
-    persist(result.correct);
-    lastAnswer = result;
+    persist(result.correct, direction);
+    lastAnswer = { ...result, chosenSemitones: answerSemitones };
     lastGain = game.session.score - scoreBefore;
     streakJustIncreased = result.correct;
     leveledUpTo = game.difficulty.level > levelBefore ? game.difficulty.level : null;
